@@ -5,11 +5,12 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 AutoFuel.autoFuelEnabled = false
-AutoFuel.fuelDelay = 1
+AutoFuel.fuelDelay = 0.5
 AutoFuel.fuelConnection = nil
 AutoFuel.lastFuelTime = 0
 AutoFuel.initAttempts = 0
 AutoFuel.maxInitAttempts = 10
+AutoFuel.instantDrop = true
 
 function AutoFuel.getPlayerPosition()
     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -53,10 +54,11 @@ function AutoFuel.findLogItems()
         
         for _, item in pairs(parent:GetChildren()) do
             if item:IsA("Model") or item:IsA("Tool") then
-                if item.Name == "Log" then
+                if item.Name == "Log" or item.Name == "Wood" or string.find(item.Name:lower(), "log") then
                     local hasValidPart = item:FindFirstChild("Handle") or 
                                         item:FindFirstChild("Meshes/log_Cylinder") or
-                                        item:FindFirstChildWhichIsA("BasePart")
+                                        item:FindFirstChildWhichIsA("BasePart") or
+                                        item:FindFirstChildWhichIsA("MeshPart")
                     if hasValidPart then
                         table.insert(fuelItems, item)
                     end
@@ -67,7 +69,7 @@ function AutoFuel.findLogItems()
                     if hasValidPart then
                         table.insert(fuelItems, item)
                     end
-                elseif item.Name == "Fuel Canister" then
+                elseif item.Name == "Fuel Canister" or item.Name == "FuelCanister" then
                     local hasValidPart = item:FindFirstChild("Handle") or 
                                         item:FindFirstChildWhichIsA("BasePart")
                     if hasValidPart then
@@ -76,7 +78,7 @@ function AutoFuel.findLogItems()
                 end
             end
             
-            if item:IsA("Folder") and (item.Name == "Items" or item.Name == "Drops" or item.Name == "DroppedItems") then
+            if item:IsA("Folder") and (item.Name == "Items" or item.Name == "Drops" or item.Name == "DroppedItems" or item.Name == "Storage") then
                 searchInObject(item)
             end
         end
@@ -116,28 +118,96 @@ function AutoFuel.initializeFire()
     local success = pcall(function()
         local firePosition = mainFire:GetBoundingBox().Position
         
-        local function createInitialSpark()
-            local sparkPart = Instance.new("Part")
-            sparkPart.Name = "InitSpark"
-            sparkPart.Size = Vector3.new(0.5, 0.5, 0.5)
-            sparkPart.Position = firePosition + Vector3.new(0, 10, 0)
-            sparkPart.Transparency = 1
-            sparkPart.CanCollide = false
-            sparkPart.Parent = workspace
-            
-            wait(0.1)
-            sparkPart.Position = firePosition + Vector3.new(0, 5, 0)
-            wait(0.1)
-            sparkPart:Destroy()
-        end
-        
-        createInitialSpark()
-        
         local fireProximity = mainFire:FindFirstChildWhichIsA("ProximityPrompt")
         if fireProximity then
-            fireProximity.MaxActivationDistance = 50
-            wait(0.1)
-            fireProximity.MaxActivationDistance = 10
+            local oldDist = fireProximity.MaxActivationDistance
+            fireProximity.MaxActivationDistance = 100
+            wait(0.05)
+            fireProximity.MaxActivationDistance = oldDist or 10
+        end
+        
+        local fireClickDetector = mainFire:FindFirstChildWhichIsA("ClickDetector")
+        if fireClickDetector then
+            local oldDist = fireClickDetector.MaxActivationDistance
+            fireClickDetector.MaxActivationDistance = 100
+            wait(0.05)
+            fireClickDetector.MaxActivationDistance = oldDist or 32
+        end
+    end)
+    
+    return success
+end
+
+function AutoFuel.instantDropToFire(fuelItem)
+    local mainFire = AutoFuel.getMainFire()
+    if not mainFire or not fuelItem or not fuelItem.Parent then
+        return false
+    end
+    
+    local success = pcall(function()
+        local fuelHandle = nil
+        
+        if fuelItem.Name == "Log" or string.find(fuelItem.Name:lower(), "log") or fuelItem.Name == "Wood" then
+            fuelHandle = fuelItem:FindFirstChild("Handle") or 
+                        fuelItem:FindFirstChild("Meshes/log_Cylinder") or
+                        fuelItem:FindFirstChildWhichIsA("MeshPart") or
+                        fuelItem:FindFirstChildWhichIsA("BasePart")
+        elseif fuelItem.Name == "Coal" then
+            fuelHandle = fuelItem:FindFirstChild("Coal") or 
+                        fuelItem:FindFirstChild("Handle") or
+                        fuelItem:FindFirstChildWhichIsA("BasePart")
+        else
+            fuelHandle = fuelItem:FindFirstChild("Handle") or 
+                        fuelItem:FindFirstChildWhichIsA("BasePart") or
+                        fuelItem:FindFirstChildWhichIsA("MeshPart")
+        end
+        
+        if fuelHandle then
+            local fireBox = mainFire:GetBoundingBox()
+            local firePosition = fireBox.Position
+            
+            for _, obj in pairs(fuelHandle:GetDescendants()) do
+                if obj:IsA("BodyVelocity") or obj:IsA("BodyPosition") or 
+                   obj:IsA("BodyAngularVelocity") or obj:IsA("BodyGyro") then
+                    obj:Destroy()
+                end
+            end
+            
+            if fuelHandle:IsA("BasePart") then
+                fuelHandle.CanCollide = false
+                fuelHandle.Anchored = false
+            end
+            
+            fuelHandle.CFrame = CFrame.new(
+                firePosition.X + math.random(-10, 10) * 0.05,
+                firePosition.Y + 3,
+                firePosition.Z + math.random(-10, 10) * 0.05
+            )
+            
+            fuelHandle.Velocity = Vector3.new(0, -20, 0)
+            fuelHandle.RotVelocity = Vector3.new(0, 0, 0)
+            
+            wait(0.05)
+            
+            fuelHandle.CFrame = CFrame.new(
+                firePosition.X,
+                firePosition.Y + 0.5,
+                firePosition.Z
+            )
+            
+            fuelHandle.Velocity = Vector3.new(0, -5, 0)
+            
+            if fuelItem:IsA("Tool") then
+                fuelItem.Parent = workspace
+            end
+            
+            wait(0.02)
+            
+            if fuelHandle and fuelHandle.Parent then
+                fuelHandle.CFrame = CFrame.new(firePosition)
+                fuelHandle.Velocity = Vector3.new(0, 0, 0)
+                fuelHandle.RotVelocity = Vector3.new(0, 0, 0)
+            end
         end
     end)
     
@@ -145,6 +215,10 @@ function AutoFuel.initializeFire()
 end
 
 function AutoFuel.moveItemToMainFire(fuelItem)
+    if AutoFuel.instantDrop then
+        return AutoFuel.instantDropToFire(fuelItem)
+    end
+    
     local mainFire, _ = AutoFuel.getMainFire()
     if not mainFire or not fuelItem or not fuelItem.Parent then
         return false
@@ -153,7 +227,7 @@ function AutoFuel.moveItemToMainFire(fuelItem)
     local success = pcall(function()
         local fuelHandle = nil
         
-        if fuelItem.Name == "Log" then
+        if fuelItem.Name == "Log" or string.find(fuelItem.Name:lower(), "log") then
             fuelHandle = fuelItem:FindFirstChild("Handle") or 
                         fuelItem:FindFirstChild("Meshes/log_Cylinder") or
                         fuelItem:FindFirstChildWhichIsA("BasePart")
@@ -172,11 +246,12 @@ function AutoFuel.moveItemToMainFire(fuelItem)
         end
         
         if fuelHandle then
-            local targetPosition = Vector3.new(0, 4, -3)
+            local fireBox = mainFire:GetBoundingBox()
+            local targetPosition = fireBox.Position
             
             fuelHandle.CFrame = CFrame.new(targetPosition + Vector3.new(
                 math.random(-2, 2) * 0.1,
-                math.random(15, 25),
+                math.random(8, 12),
                 math.random(-2, 2) * 0.1
             ))
             
@@ -186,35 +261,16 @@ function AutoFuel.moveItemToMainFire(fuelItem)
                 end
             end
             
-            fuelHandle.Velocity = Vector3.new(0, -10, 0)
+            fuelHandle.Velocity = Vector3.new(0, -15, 0)
             fuelHandle.RotVelocity = Vector3.new(
-                math.random(-5, 5),
-                math.random(-5, 5),
-                math.random(-5, 5)
+                math.random(-3, 3),
+                math.random(-3, 3),
+                math.random(-3, 3)
             )
-            
-            if fuelHandle:FindFirstChild("AssemblyLinearVelocity") then
-                fuelHandle.AssemblyLinearVelocity = Vector3.new(0, -10, 0)
-            end
-            if fuelHandle:FindFirstChild("AssemblyAngularVelocity") then
-                fuelHandle.AssemblyAngularVelocity = Vector3.new(
-                    math.random(-5, 5),
-                    math.random(-5, 5),
-                    math.random(-5, 5)
-                )
-            end
             
             if fuelItem:IsA("Tool") then
                 fuelItem.Parent = workspace
             end
-            
-            wait(0.05)
-            
-            fuelHandle.CFrame = CFrame.new(targetPosition + Vector3.new(
-                math.random(-1, 1) * 0.1,
-                2,
-                math.random(-1, 1) * 0.1
-            ))
         end
     end)
     
@@ -233,26 +289,26 @@ function AutoFuel.autoFuelLoop()
     if not mainFire and AutoFuel.initAttempts < AutoFuel.maxInitAttempts then
         AutoFuel.initializeFire()
         AutoFuel.initAttempts = AutoFuel.initAttempts + 1
-        wait(0.5)
+        wait(0.2)
         return
     end
     
     local fuelItems = AutoFuel.findLogItems()
     
     if #fuelItems > 0 then
-        local itemsToFuel = math.min(#fuelItems, 3)
+        local itemsToFuel = math.min(#fuelItems, 5)
         for i = 1, itemsToFuel do
             local fuelItem = fuelItems[i]
             if fuelItem and fuelItem.Parent then
                 local moved = AutoFuel.moveItemToMainFire(fuelItem)
                 if moved then
-                    wait(0.15)
+                    wait(0.08)
                 end
             end
         end
         AutoFuel.lastFuelTime = currentTime
     else
-        if AutoFuel.initAttempts < AutoFuel.maxInitAttempts then
+        if AutoFuel.initAttempts < AutoFuel.maxInitAttempts and AutoFuel.initAttempts % 3 == 0 then
             AutoFuel.initializeFire()
             AutoFuel.initAttempts = AutoFuel.initAttempts + 1
         end
@@ -265,7 +321,7 @@ function AutoFuel.setEnabled(enabled)
     
     if enabled then
         AutoFuel.initializeFire()
-        wait(0.5)
+        wait(0.2)
         
         if AutoFuel.fuelConnection then
             AutoFuel.fuelConnection:Disconnect()
@@ -281,6 +337,10 @@ end
 
 function AutoFuel.setFuelDelay(delay)
     AutoFuel.fuelDelay = delay
+end
+
+function AutoFuel.setInstantDrop(enabled)
+    AutoFuel.instantDrop = enabled
 end
 
 function AutoFuel.getStatus()
@@ -301,7 +361,7 @@ function AutoFuel.getStatus()
             local canisterCount = 0
             
             for _, item in pairs(fuelItems) do
-                if item.Name == "Log" then
+                if item.Name == "Log" or string.find(item.Name:lower(), "log") or item.Name == "Wood" then
                     logCount = logCount + 1
                 elseif item.Name == "Coal" then
                     coalCount = coalCount + 1
@@ -310,8 +370,9 @@ function AutoFuel.getStatus()
                 end
             end
             
-            return string.format("Status: Active - Logs:%d Coal:%d Cans:%d @ (0,4,-3) - Delay:%.1fs", 
-                   logCount, coalCount, canisterCount, AutoFuel.fuelDelay), distance
+            local dropMode = AutoFuel.instantDrop and "INSTANT" or "Normal"
+            return string.format("Status: [%s] Logs:%d Coal:%d Cans:%d - Delay:%.1fs", 
+                   dropMode, logCount, coalCount, canisterCount, AutoFuel.fuelDelay), distance
         else
             return "Status: Searching for fuel items...", 0
         end
