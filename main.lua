@@ -1,7 +1,7 @@
-local TreeChopper = loadstring(game:HttpGet('https://raw.githubusercontent.com/Levitzy/99nitf/refs/heads/main/tree.lua'))()
-local AutoFuel = loadstring(game:HttpGet('https://raw.githubusercontent.com/Levitzy/99nitf/refs/heads/main/autofuel.lua'))()
-local Fly = loadstring(game:HttpGet('https://raw.githubusercontent.com/Levitzy/99nitf/refs/heads/main/fly.lua'))()
-local AutoKill = loadstring(game:HttpGet('https://raw.githubusercontent.com/Levitzy/99nitf/refs/heads/main/autokill.lua'))()
+local TreeChopper = loadstring(game:HttpGet('https://raw.githubusercontent.com/Jubiar01/99nitf-1/refs/heads/main/tree.lua'))()
+local AutoFuel = loadstring(game:HttpGet('https://raw.githubusercontent.com/Jubiar01/99nitf-1/refs/heads/main/autofuel.lua'))()
+local Fly = loadstring(game:HttpGet('https://raw.githubusercontent.com/Jubiar01/99nitf-1/refs/heads/main/fly.lua'))()
+local AutoKill = loadstring(game:HttpGet('https://raw.githubusercontent.com/Jubiar01/99nitf-1/refs/heads/main/autokill.lua'))()
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
